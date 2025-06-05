@@ -1,0 +1,34 @@
+[Container]
+AutoUpdate=registry
+ContainerName=TARGETNAME_phpmyadmin_nginx
+
+Network=proxy.network
+
+Image=docker.io/nginx:latest
+
+Volume=TARGETNAME_phpmyadmin:/var/www/html:z
+Volume=TARGETNAME_phpmyadmin-fpm-socket:/run/php-fpm/:z
+Volume=TARGETNAME_phpmyadmin-nginx-cache:/var/run/nginx-cache:z
+Volume=./conf/nginx/snipplets:/etc/nginx/snipplets:ro,z
+Volume=./conf/nginx/conf.d:/etc/nginx/conf.d:ro,z
+Volume=./conf/nginx/certs/key.pem:/etc/ssl/private/ssl-cert-snakeoil.key:ro,z
+Volume=./conf/nginx/certs/cert.pem:/etc/ssl/certs/ssl-cert-snakeoil.pem:ro,z
+
+Label=traefik.enable="true"
+Label=traefik.http.routers.TARGETNAME_phpmyadmin.rule="Host(`TARGETFQDN`) && PathPrefix(`/phpmyadmin`)"
+Label=traefik.http.middlewares.TARGETNAME_phpmyadmin_auth.basicauth.users="PMA_WEB_AUTH_STRING"
+Label=traefik.http.routers.TARGETNAME_phpmyadmin.middlewares="compression@file,phpmyadmin-strip-prefix@file,proxyHeaders@file,securityHeaders@file,TARGETNAME_phpmyadmin_auth"
+Label=traefik.http.services.TARGETNAME_phpmyadmin.loadbalancer.server.port="443"
+Label=traefik.http.services.TARGETNAME_phpmyadmin.loadbalancer.server.scheme="https"
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target default.target
+
+[Unit]
+Description=TARGETNAME PHPMyAdmin Nginx container
+After=TARGETNAME_mariadb.service TARGETNAME_phpmyadmin_fpm.service
+Requires=TARGETNAME_mariadb.service TARGETNAME_phpmyadmin_fpm.service
+

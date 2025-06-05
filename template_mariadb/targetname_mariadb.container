@@ -1,0 +1,27 @@
+[Container]
+AutoUpdate=registry
+ContainerName=TARGETNAME_mariadb
+
+Network=proxy.network
+
+Image=docker.io/mariadb:latest
+
+Volume=TARGETNAME_mariadb:/var/lib/mysql:Z
+Volume=TARGETNAME_mariadb-socket:/run/mysqld/:z
+Volume=./conf/mariadb/initdb.d:/docker-entrypoint-initdb.d:ro,Z
+Volume=./.env_files/mariadb_password:/.env_files/mariadb_password:ro,Z
+
+Environment=MARIADB_DATABASE="TARGETNAME"
+Environment=MARIADB_USER="TARGETNAME"
+Environment=MARIADB_PASSWORD_FILE=/.env_files/mariadb_password
+Environment=MARIADB_RANDOM_ROOT_PASSWORD=1
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target default.target
+
+[Unit]
+Description=TARGETNAME MariaDB container
+

@@ -1,0 +1,27 @@
+[Container]
+AutoUpdate=registry
+ContainerName=TARGETNAME_hosting_fpm
+
+Network=proxy.network
+
+Image=php-fpm.build
+
+Volume=TARGETNAME_mariadb-socket:/run/mysqld/:z
+Volume=TARGETNAME_hosting-fpm-socket:/run/php-fpm/:z
+Volume=TARGETNAME_hosting-nginx-cache:/var/run/nginx-cache:z
+Volume=./conf/php-fpm/php-fpm.d/zzz_custom.conf:/usr/local/etc/php-fpm.d/zzz_custom.conf:ro,z
+Volume=./conf/php-fpm/php/conf.d/zzz_custom.ini:/usr/local/etc/php/conf.d/zzz_custom.ini:ro,z
+Volume=./hosting:/var/www/html:z
+
+AddHost=TARGETFQDN:169.254.1.2
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target default.target
+
+[Unit]
+Description=TARGETNAME Hosting PHP-FPM Container
+After=TARGETNAME_mariadb.service
+Requires=TARGETNAME_mariadb.service

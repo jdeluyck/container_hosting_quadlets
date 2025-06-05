@@ -1,0 +1,33 @@
+[Container]
+AutoUpdate=registry
+ContainerName=TARGETNAME_hosting_nginx
+
+Network=proxy.network
+
+Image=docker.io/nginx:latest
+
+Volume=TARGETNAME_hosting-fpm-socket:/run/php-fpm/:z
+Volume=TARGETNAME_hosting-nginx-cache:/var/run/nginx-cache:z
+Volume=./hosting:/var/www/html:z
+Volume=./conf/nginx/snipplets:/etc/nginx/snipplets:ro,z
+Volume=./conf/nginx/docker-entrypoint.d/10-change-user.sh:/docker-entrypoint.d/10-change-user.sh:ro,z
+Volume=./conf/nginx/conf.d:/etc/nginx/conf.d:ro,z
+Volume=./conf/nginx/certs/key.pem:/etc/ssl/private/ssl-cert-snakeoil.key:ro,z
+Volume=./conf/nginx/certs/cert.pem:/etc/ssl/certs/ssl-cert-snakeoil.pem:ro,z
+
+Label=traefik.enable="true"
+Label=traefik.http.routers.TARGETNAME_hosting.rule="Host(`TARGETFQDN`)"
+Label=traefik.http.routers.TARGETNAME_hosting.middlewares="compression@file,proxyHeaders@file,securityHeaders@file"
+Label=traefik.http.services.TARGETNAME_hosting.loadbalancer.server.port="443"
+Label=traefik.http.services.TARGETNAME_hosting.loadbalancer.server.scheme="https"
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target default.target
+
+[Unit]
+Description=TARGETNAME Hosting Nginx container
+After=TARGETNAME_mariadb.service TARGETNAME_hosting_fpm.service
+Requires=TARGETNAME_mariadb.service TARGETNAME_hosting_fpm.service

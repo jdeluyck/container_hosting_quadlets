@@ -1,0 +1,110 @@
+#!/bin/bash
+
+SSH_HOSTNAME="<target_ssh_hostname>"
+
+CONTAINERS_DIR="${HOME}/containers"
+TARGET_SYSTEMD_DIR="${HOME}/.config/containers/systemd"
+
+TEMPLATE="template_mariadb"
+
+PHPMYADMIN_WEB_USER="phpmyadmin"
+
+generate_pw() {
+   echo $(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+}
+
+generate_htpasswd() {
+  echo $(htpasswd -nb ${PHPMYADMIN_WEB_USER} ${1}) 
+}
+
+read -p "Target hostname: " TARGETFQDN
+read -p "Continue? (Y/N): " confirm && [[ $confirm == [yY] ]] || exit 1
+
+TARGETNAME=$(echo ${TARGETFQDN} | tr . _)
+
+TARGET_DIR="${TARGET_SYSTEMD_DIR}/${TARGETFQDN}"
+
+echo "Copying files to ${TARGET_DIR} and renaming..."
+cp -r ${TEMPLATE} ${TARGET_DIR}
+ln -s ${TARGET_DIR} ${CONTAINERS_DIR}/${TARGETFQDN}
+rename targetname ${TARGETNAME} ${TARGET_DIR}/*.volume
+rename targetname ${TARGETNAME} ${TARGET_DIR}/*.container
+
+MARIADB_PW=$(generate_pw)
+PMA_CONTROLPW=$(generate_pw)
+PMA_WEB_PW=$(generate_pw)
+
+# FQDN
+echo ""
+echo "Setting fqdn to ${TARGETFQDN}..."
+sed -i "s#TARGETFQDN#${TARGETFQDN}#g" ${TARGET_DIR}/*.container ${TARGET_DIR}/*.volume
+
+# NAME
+echo ""
+echo "Setting name to ${TARGETNAME}..."
+sed -i "s#TARGETNAME#${TARGETNAME}#g" ${TARGET_DIR}/*.container ${TARGET_DIR}/*.volume
+
+# PHPMYADMIN
+echo ""
+echo "Configuring PHPMyAdmin..."
+echo "- Setting phpmyadmin PMA password"
+echo ${PMA_CONTROLPW} > ${TARGET_DIR}/.env_files/phpmyadmin_pma_password
+sed -i "s#TARGETSTRING#${PMA_CONTROLPW}#" ${TARGET_DIR}/conf/mariadb/initdb.d/02_create_pma.sql
+
+echo "- Setting PhpMyadmin Web password"
+PMA_WEB_AUTH_STRING=$(generate_htpasswd ${PMA_WEB_PW})
+sed -i "s#PMA_WEB_AUTH_STRING#${PMA_WEB_AUTH_STRING}#" ${TARGET_DIR}/${TARGETNAME}_phpmyadmin_nginx.container
+
+# MARIADB
+echo ""
+echo "Configuring MariaDB..."
+echo "- Setting mariadb password"
+echo ${MARIADB_PW} > ${TARGET_DIR}/.env_files/mariadb_password
+sed -i "s#MARIADB_PW#${MARIADB_PW}#/" ${TARGET_DIR}/{TARGET_NAME}_mariadb_backup.container
+
+#SSHPIPER to OPENSSH
+echo ""
+echo "Configuring OpenSSH <-> SSHPiper"
+echo "- Generating SSH key pair for SSHPiper <-> OpenSSH"
+ssh-keygen -t ed25519 -f ${TARGET_DIR}/temp-ssh -N "" > /dev/null
+SSHPIPER_TO_OPENSSH_PUB_KEY="$(cat ${TARGET_DIR}/temp-ssh.pub)"
+SSHPIPER_TO_OPENSSH_PRV_KEY="$(cat ${TARGET_DIR}/temp-ssh | base64 -w 0)"
+rm ${TARGET_DIR}/temp-ssh ${TARGET_DIR}/temp-ssh.pub
+
+echo "- Configuring keys"
+sed -i "s#SSHPIPER_TO_OPENSSH_PRIVATE_KEY#${SSHPIPER_TO_OPENSSH_PRV_KEY}#" ${TARGET_DIR}/${TARGETNAME}_openssh.container
+sed -i "s#SSHPIPER_TO_OPENSSH_PUBLIC_KEY#${SSHPIPER_TO_OPENSSH_PUB_KEY}#" ${TARGET_DIR}/${TARGETNAME}_openssh.container
+
+echo "- Generating SSH key pair for public <-> SSHPiper"
+ssh-keygen -t ed25519  -f ${TARGET_DIR}/temp-ssh -N "" > /dev/null
+PUBLIC_TO_SSHPIPER_PRV_KEY=$(cat ${TARGET_DIR}/temp-ssh)
+PUBLIC_TO_SSHPIPER_PUB_KEY=$(cat ${TARGET_DIR}/temp-ssh.pub | base64 -w 0)
+rm ${TARGET_DIR}/temp-ssh ${TARGET_DIR}/temp-ssh.pub
+
+echo "- Configuring keys"
+sed -i "s#SSHPIPER_AUTHORIZED_KEYS#${PUBLIC_TO_SSHPIPER_PUB_KEY}#" ${TARGET_DIR}/${TARGETNAME}_openssh.container
+
+echo ""
+echo "Created container defintions for:"
+for CONTAINER in $(ls ${TARGET_DIR}/*.container); do
+  echo "- $(basename ${CONTAINER} | cut -d \. -f 1)"
+done
+
+echo ""
+echo "Reloading systemd..."
+systemctl --user daemon-reload
+
+echo "Done!"
+echo ""
+echo "Mariadb user: ${TARGETNAME}"
+echo "Mariadb Pass: ${MARIADB_PW}"
+echo ""
+echo "PhpMyAdmin web url: https://${TARGETFQDN}/${PHPMYADMIN_WEB_USER}/"
+echo "PhpMyAdmin web user: ${PHPMYADMIN_WEB_USER}"
+echo "PhpMyAdmin web pass: ${PMA_WEB_PW}"
+echo ""
+echo "Use the following private key to SSH to ${SSH_HOSTNAME}, with user ${TARGETNAME}:"
+echo "${PUBLIC_TO_SSHPIPER_PRV_KEY}"
+echo ""
+
+

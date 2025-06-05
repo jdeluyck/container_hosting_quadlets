@@ -1,0 +1,36 @@
+[Container]
+AutoUpdate=registry
+ContainerName=TARGETNAME_mariadb_backup
+
+Network=proxy.network
+
+Image=docker.io/databack/mysql-backup:master
+
+Volume=TARGETNAME_mariadb-socket:/run/mysqld/:z
+Volume=./backups:/backups:z
+
+Environment=DB_SERVER=/run/mysqld/mysqld.sock
+Environment=DB_USER="TARGETNAME"
+Environment=DB_PASS="MARIADB_PW"
+Environment=DB_DUMP_INCLUDE=TARGETNAME
+Environment=DB_DUMP_TARGET=/backups
+Environment=DB_DUMP_CRON="30 00 * * *"
+Environment=DB_DUMP_RETENTION=30d
+
+#Make sure it's written with a user we can use later
+User=33
+Group=33
+
+Exec=dump
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target default.target
+
+[Unit]
+Description=TARGETNAME MariaDB backup container
+After=TARGETNAME_mariadb.service
+Requires=TARGETNAME_mariadb.service
+

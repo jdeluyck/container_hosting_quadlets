@@ -1,0 +1,33 @@
+[Container]
+AutoUpdate=registry
+ContainerName=TARGETNAME_phpmyadmin_fpm
+
+Network=proxy.network
+
+Image=docker.io/phpmyadmin:fpm
+
+Volume=TARGETNAME_mariadb-socket:/run/mysqld/:z
+Volume=TARGETNAME_phpmyadmin-sessions:/sessions:Z
+Volume=TARGETNAME_phpmyadmin-fpm-socket:/run/php-fpm/:z
+Volume=TARGETNAME_phpmyadmin:/var/www/html:z
+Volume=./conf/php-fpm/php-fpm.d/zzz_custom.conf:/usr/local/etc/php-fpm.d/zzz_custom.conf:ro,z
+Volume=./conf/php-fpm/php/conf.d/zzz_custom.ini:/usr/local/etc/php/conf.d/zzz_custom.ini:ro,z
+Volume=./.env_files/phpmyadmin_pma_password:/.env_files/phpmyadmin_pma_password:ro,Z
+
+Environment=PMA_ABSOLUTE_URI=https://TARGETFQDN/phpmyadmin/"
+Environment=PMA_PMADB=phpmyadmin"
+Environment=PMA_CONTROLUSER=pma"
+Environment=PMA_CONTROLPASS_FILE=/.env_files/phpmyadmin_pma_password"
+Environment=PMA_SOCKET=/run/mysqld/mysqld.sock"
+Environment=PMA_QUERYHISTORYDB=1"
+
+[Service]
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target default.target
+
+[Unit]
+Description=TARGETNAME PhpMyAdmin PHP-FPM Container
+After=TARGETNAME_mariadb.service
+Requires=TARGETNAME_mariadb.service
